@@ -1,0 +1,6 @@
+node_modules/
+out/
+cache/
+.vitest_cache/
+*.log
+audit-report.json

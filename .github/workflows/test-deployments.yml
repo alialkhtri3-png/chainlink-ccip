@@ -1,0 +1,197 @@
+name: "Test Deployments"
+concurrency:
+  group: deployments-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - "main"
+      - "develop"
+
+jobs:
+  detect_deployments_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_solana_deployment: ${{ steps.filter.outputs.run_deployment == 'true' || steps.filter.outputs.run_solana_deployment == 'true' }}
+      run_evm_deployment: ${{ steps.filter.outputs.run_deployment == 'true' || steps.filter.outputs.run_evm_deployment == 'true' }}
+      run_deployment: ${{ steps.filter.outputs.run_deployment == 'true' }}
+      run_crosschain_deployment: ${{ steps.filter.outputs.run_deployment == 'true' || steps.filter.outputs.run_solana_deployment == 'true' || steps.filter.outputs.run_evm_deployment == 'true' || steps.filter.outputs.run_crosschain_deployment == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          list-files: "shell"
+          filters: |
+            run_deployment:
+              - 'deployment/**'
+              - '.github/workflows/test-deployments.yml'
+            run_evm_deployment:
+              - 'chains/evm/gobindings/generated/**'
+              - 'chains/evm/deployment/**'
+            run_solana_deployment:
+              - 'chains/solana/gobindings/generated/**'
+              - 'chains/solana/deployment/**'
+            run_crosschain_deployment:
+              - 'integration-tests/deployment/**'
+
+  test-evm-deployments:
+    needs: [detect_deployments_changes]
+    if: ${{ needs.detect_deployments_changes.outputs.run_evm_deployment == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chains/evm/deployment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: Test EVM Deployments
+        id: run-tests
+        continue-on-error: true
+        run: gotestsum --junitfile=test-results.xml --format=github-actions -- ./...
+      - name: Analyze and upload test results
+        uses: smartcontractkit/.github/actions/branch-out-upload@branch-out-upload/v1
+        with:
+          junit-file-path: chains/evm/deployment/test-results.xml
+          trunk-org-slug: chainlink
+          trunk-previous-step-outcome: ${{ steps.run-tests.outcome }}
+          trunk-token: ${{ secrets.TRUNK_API_KEY }}
+          trunk-job-url: ${{ format('https://github.com/{0}/actions/runs/{1}/job/{2}/attempts/{3}', github.repository, github.run_id, job.check_run_id, github.run_attempt) }}
+
+  test-evm-deployments-race:
+      needs: [detect_deployments_changes]
+      if: ${{ needs.detect_deployments_changes.outputs.run_evm_deployment == 'true' }}
+      runs-on: ubuntu-latest
+      defaults:
+        run:
+          working-directory: chains/evm/deployment
+
+      steps:
+        - uses: actions/checkout@v4
+
+        - name: Set up Go
+          uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+          with:
+            go-version-file: go.mod
+
+        - name: Install gotestsum
+          run: go install gotest.tools/gotestsum@latest
+
+        - name: Run race-detector tests
+          id: run-race-tests
+          continue-on-error: true
+          run: |
+            gotestsum \
+              --junitfile=race-results.xml \
+              --format=github-actions \
+              -- -race -run '^TestCurseAdapterConcurrentAccess$' ./...
+
+        - name: Analyze and upload race test results
+          if: ${{ always() }}
+          uses: smartcontractkit/.github/actions/branch-out-upload@branch-out-upload/v1
+          with:
+            junit-file-path: chains/evm/deployment/race-results.xml
+            trunk-org-slug: chainlink
+            trunk-previous-step-outcome: ${{ steps.run-race-tests.outcome }}
+            trunk-token: ${{ secrets.TRUNK_API_KEY }}
+            trunk-variant: race
+            artifact-name: evm_deployment_race_test_logs
+            trunk-job-url: ${{ format('https://github.com/{0}/actions/runs/{1}/job/{2}/attempts/{3}', github.repository, github.run_id, job.check_run_id, github.run_attempt) }}
+
+  test-solana-deployments:
+    needs: [detect_deployments_changes]
+    if: ${{ needs.detect_deployments_changes.outputs.run_solana_deployment == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chains/solana/deployment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: Test Solana Deployments
+        id: run-tests
+        continue-on-error: true
+        run: gotestsum --junitfile=test-results.xml --format=github-actions -- ./...
+      - name: Analyze and upload test results
+        uses: smartcontractkit/.github/actions/branch-out-upload@branch-out-upload/v1
+        with:
+          junit-file-path: chains/solana/deployment/test-results.xml
+          trunk-org-slug: chainlink
+          trunk-previous-step-outcome: ${{ steps.run-tests.outcome }}
+          trunk-token: ${{ secrets.TRUNK_API_KEY }}
+          trunk-job-url: ${{ format('https://github.com/{0}/actions/runs/{1}/job/{2}/attempts/{3}', github.repository, github.run_id, job.check_run_id, github.run_attempt) }}
+
+  test-deployments:
+    needs: [detect_deployments_changes]
+    if: ${{ needs.detect_deployments_changes.outputs.run_deployment == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deployment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: Test Crosschain Deployments
+        id: run-tests
+        continue-on-error: true
+        run: gotestsum --junitfile=test-results.xml --format=github-actions -- ./...
+      - name: Analyze and upload test results
+        uses: smartcontractkit/.github/actions/branch-out-upload@branch-out-upload/v1
+        with:
+          junit-file-path: deployment/test-results.xml
+          trunk-org-slug: chainlink
+          trunk-previous-step-outcome: ${{ steps.run-tests.outcome }}
+          trunk-token: ${{ secrets.TRUNK_API_KEY }}
+          trunk-job-url: ${{ format('https://github.com/{0}/actions/runs/{1}/job/{2}/attempts/{3}', github.repository, github.run_id, job.check_run_id, github.run_attempt) }}
+
+  test-deployments-crosschain:
+    needs: [detect_deployments_changes]
+    if: ${{ needs.detect_deployments_changes.outputs.run_crosschain_deployment == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: integration-tests/deployment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: go.mod
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)" # always use latest stable release from solana
+          echo "PATH=$HOME/.local/share/solana/install/active_release/bin:$PATH" >> $GITHUB_ENV
+      - name: Test Crosschain Deployments
+        id: run-tests
+        continue-on-error: true
+        run: gotestsum --junitfile=test-results.xml --format=github-actions -- -timeout 30m ./...
+      - name: Analyze and upload test results
+        uses: smartcontractkit/.github/actions/branch-out-upload@branch-out-upload/v1
+        with:
+          junit-file-path: integration-tests/deployment/test-results.xml
+          trunk-org-slug: chainlink
+          trunk-previous-step-outcome: ${{ steps.run-tests.outcome }}
+          trunk-token: ${{ secrets.TRUNK_API_KEY }}
+          trunk-job-url: ${{ format('https://github.com/{0}/actions/runs/{1}/job/{2}/attempts/{3}', github.repository, github.run_id, job.check_run_id, github.run_attempt) }}
