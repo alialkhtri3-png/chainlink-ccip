@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJhbGdvcml0aG0iOiJlcmMxOTEiLCJmaWQiOjEyMzQ1Nn0=",
+    "payload": "eyJmaWQiOjEyMzQ1Niwia2V5IjoiMHgxQmUzMUE5NDM2MWEzOTFiQmFGQjJhNENDZDcwNEY1N2RjMDRkNGJiIiwiZG9tYWluIjoieW91cmRvbWFpbi5jb20iLCJ0aW1lc3RhbXAiOjE3OTA2MjIxMzF9",
+    "signature": "0x6886b4b72b5f703175af3595673e31445270080ecabbc273f61802347761d208778c773e2ba4722975ff7a0827319acad87bbd14974c4fe4fcbf0202a24aca341c"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "تطبيق علي الخطري",
+    "iconUrl": "https://yourdomain.com/logo.png",
+    "homeUrl": "https://yourdomain.com/",
+    "imageUrl": "https://yourdomain.com/opengraph-image",
+    "buttonTitle": "🚩 ابدأ",
+    "splashImageUrl": "https://yourdomain.com/logo.png",
+    "splashBackgroundColor": "#f5f0ec",
+    "webhookUrl": "https://yourdomain.com/api/webhook"
+  }
+}
